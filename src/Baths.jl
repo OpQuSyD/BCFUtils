@@ -1,5 +1,5 @@
 # Ohmic bath
-export OhmicExp
+export OhmicExpCO
 # multi exp bath 
 export MultiExpBCF, GW_2_u, u_2_GW
 # utility functions
@@ -27,7 +27,7 @@ From that one can deduce
 * as well as the half-sided Fourier-transform of the BCF
     F(ω) = ∫_0^∞ d t α(β, t) exp(i ω t) = J(ω) + i S(ω)
 """
-abstract type StructuredBath end
+abstract type AbstractBath{T<:AbstractFloat} end
 
 
 
@@ -40,11 +40,11 @@ OhmicExpCO defines the class of (sub-/super-) Ohmic baths with exponential cutof
 
     J(ω) = η ω^s exp(-ω / wc)
 """
-struct OhmicExpCO <: StructuredBath 
-    s
-    η
-    wc
-    c1    # used to cache prefactor of the BCF
+struct OhmicExpCO{T} <: AbstractBath{T}
+    s::T
+    η::T
+    wc::T
+    c1::T    # used to cache prefactor of the BCF
     "if 'c1' (prefctor of the BCF) is given, η will be set accordingly"
     function OhmicExpCO(s, η=1, wc=1; c1=nothing)
         if c1 === nothing
@@ -52,9 +52,11 @@ struct OhmicExpCO <: StructuredBath
         else
             η = c1*π/Γ(s+1)
         end
-        new(s, η, wc, c1)
-    end
+        s, η, wc, c1 = promote(s, η, wc, c1)
+        new{typeof(s)}(s, η, wc, c1)
+    end     
 end
+
 
 
 sd(w, b::OhmicExpCO) = b.η * w^b.s * exp(-w/b.wc)
@@ -80,7 +82,7 @@ end
 
 
 "convert u -> G,W, based on G e^-Wt = exp(-u12 - u34t)"
-function u_2_GW(u::Vector{T}) where {T <: AbstractFloat}
+function u_2_GW(u::Vector{T}) where {T <: Real}
     G = exp.( -complex.(u[1:4:end], u[2:4:end]))
     W = complex.(u[3:4:end], u[4:4:end])
     return G, W
@@ -95,10 +97,10 @@ amounts to a sum of Lorentzians.
 Otherwise the spectral in not guaranteed to be real and positive.
 Nonetheless, as mathematical vehicle, such a BCF is perfectly sound.
 """
-struct MultiExpBCF <: StructuredBath
-    u
+struct MultiExpBCF{T} <: AbstractBath{T}
+    u::Vector{T}
     n::Integer
-    MultiExpBCF(u) = length(u) % 4 == 0 ? new(u, length(u) ÷ 4) : throw("length of u must be multiple of 4") 
+    MultiExpBCF(u::Vector{T}) where T<:Real = length(u) % 4 == 0 ? new{T}(u, length(u) ÷ 4) : throw("length of u must be multiple of 4") 
 end
 MultiExpBCF(G, W) = MultiExpBCF(GW_2_u(G, W))
 

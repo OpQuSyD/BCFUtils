@@ -1,7 +1,7 @@
 module BCFUtils
 
-include("Classes.jl")
-include("TauRange.jl")
+include("Baths.jl")
+include("TauIter.jl")
 include("Fitter.jl")
 
 
