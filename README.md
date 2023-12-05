@@ -1,2 +1,2 @@
 # BCFUtils
-find multi-exponential representations by fitting bath correlation functions in time domain
+utilizuies to manage bath correlation function and related quantities including fitting of multi-exponential representations in time domain 
