@@ -286,7 +286,7 @@ end
 
 
 "load state, run fits, save state and return numbes of processed sobol samples"
-function fit(ofc::FitCfg, num_samples, path=".fit"; verbose=true)
+function fit(ofc::FitCfg, num_samples, path=".fit"; verbose=false)
     ofs, _ = load(ofc, path)
     i_0 = ofs.sobol_idx
     _, was_interrupted = sobol_scan_fit!(ofc, ofs, num_samples, verbose=verbose)
