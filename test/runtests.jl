@@ -3,21 +3,60 @@ using Revise
 using BCFUtils
 using Test
 
+typeof_bath(b::OhmicExpCO{T}) where T = T 
+
+###########################################################
+# simple tests of the Ohmic sd with exponential cutoff
+
+b = OhmicExpCO(0.2)
+@test typeof_bath(b) == typeof(2.0)
+
+b = OhmicExpCO(1)
+@test typeof_bath(b) == typeof(2.0)
+
+b = OhmicExpCO(1, c1=1)
+@test typeof_bath(b) == typeof(2.0)
+
+b = OhmicExpCO{Float32}(1)
+@test typeof_bath(b) == Float32
+
+b = OhmicExpCO(BigFloat(1, precision=20))
+@test typeof_bath(b) == BigFloat
+
+eta = 2.3
+b = OhmicExpCO(0.5, eta, 10000)
+@test abs(sd(1, b) - eta) < 0.001
+
+b = OhmicExpCO(1, c1=1)
+@test bcf(0, b) == 1
+@test abs(bcf(1, b)) == 1/2
+
 
 ###########################################################
 # simple tests of the exp bcf
 
-# test instanciation -- convert int to float
+# test instanciation -- auto convert int to float
 G = [2 + 0im]
 W = [0 + 1im]
 b = MultiExpBCF(G, W)
 @test eltype(b.u) == typeof(log(3))
 
-# test instanciation -- promote BigFloat
+# test instanciation -- auto promote BigFloat
 G = [BigFloat(2, precision=20) + 0im]
 W = [0 + 1im]
 b = MultiExpBCF(G, W)
 @test eltype(b.u) == BigFloat
+
+# auto deduce Float32 as type from G and W
+G = ComplexF32[2 + 0im]
+W = ComplexF32[0 + 1im]
+b = MultiExpBCF(G, W)
+@test eltype(b.u) == Float32
+
+# call with explicit Type
+b = MultiExpBCF{Float64}(G, W)
+@test eltype(b.u) == Float64
+
 
 # test specific value
 @test bcf(0, b) == 2

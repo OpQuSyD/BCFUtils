@@ -9,6 +9,12 @@ using SpecialFunctions
 
 Γ = gamma
 
+"all vars to type T"
+convert_many(T::Type, vars...) = Tuple(convert(T, x) for x in vars)
+
+"promoted type of all vars"
+promote_type_of_many(vars...) = promote_type(Tuple(typeof(x) for x in vars)...)
+
 
 """
 A structured bath is defined via its spectral density J(ω).
@@ -52,11 +58,19 @@ struct OhmicExpCO{T} <: AbstractBath{T}
         else
             η = c1*π/Γ(s+1)
         end
-        s, η, wc, c1 = promote(s, η, wc, c1)
-        new{typeof(s)}(s, η, wc, c1)
+        T = promote_type_of_many(s, η, wc, c1)
+        new{T}(convert_many(T, s, η, wc, c1)...)
     end     
 end
 
+function OhmicExpCO{T}(s, η=1, wc=1; c1=nothing) where T <: AbstractFloat
+    if c1 === nothing
+        return OhmicExpCO(convert_many(T, s, η, wc)...)
+    else
+        s, η, wc, c1 = convert_many(T, s, η, wc, c1)
+        return OhmicExpCO(s, η, wc, c1=c1)
+    end
+end
 
 
 sd(w, b::OhmicExpCO) = b.η * w^b.s * exp(-w/b.wc)
@@ -71,12 +85,18 @@ bcf(t, b::OhmicExpCO) = b.c1 * (b.wc/(1.0 + im*b.wc*t) )^(b.s+1)
 
 "convert G,W -> u, based on G e^-Wt = exp(-u12 - u34t)"
 function GW_2_u(G, W)
-    T = promote_type(typeof(real(G[1])), typeof(real(W[1])), typeof(log(2)))
+    u1 = -real.(log.(G))
+    u2 = -imag.(log.(G))
+    u3 = real.(W)
+    u4 = imag.(W)
+    T = promote_type(eltype(u1), eltype(u2), eltype(u3), eltype(u4))
+
     u = Vector{T}(undef, 4*length(G))
-    u[1:4:end] .= -real.(log.(G))
-    u[2:4:end] .= -imag.(log.(G))
-    u[3:4:end] .= real.(W)
-    u[4:4:end] .= imag.(W)
+    u[1:4:end] .= u1
+    u[2:4:end] .= u2
+    u[3:4:end] .= u3
+    u[4:4:end] .= u4
+    
     return u
 end
 
@@ -100,9 +120,10 @@ Nonetheless, as mathematical vehicle, such a BCF is perfectly sound.
 struct MultiExpBCF{T} <: AbstractBath{T}
     u::Vector{T}
     n::Integer
-    MultiExpBCF(u::Vector{T}) where T<:Real = length(u) % 4 == 0 ? new{T}(u, length(u) ÷ 4) : throw("length of u must be multiple of 4") 
+    MultiExpBCF(u::Vector{T}) where T<:AbstractFloat = length(u) % 4 == 0 ? new{T}(u, length(u) ÷ 4) : throw("length of u must be multiple of 4") 
 end
 MultiExpBCF(G, W) = MultiExpBCF(GW_2_u(G, W))
+MultiExpBCF{T}(G, W) where {T <: AbstractFloat} = MultiExpBCF(Vector{T}(GW_2_u(G, W)))
 
 
 "direct acces to the 'u-form' used for fitting"
