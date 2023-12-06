@@ -178,7 +178,7 @@ An InterruptException will stop the routine early and return gracefully with the
     and stores sequentially improving results
 - `num_samples` the maximum number of samples to process
 """
-function sobol_scan_fit!(ofc::FitCfg{T}, ofs::FitState{T}, num_samples; verbose=true) where {T<:AbstractFloat}
+function sobol_scan_fit!(ofc::FitCfg{T}, ofs::FitState{T}, num_samples; verbose=false) where {T<:AbstractFloat}
     # we need the parametric type {T} here, as its needed to instanciate the new solution object
 
     tau_test = collect(ofc.tau_range)
@@ -220,7 +220,7 @@ function sobol_scan_fit!(ofc::FitCfg{T}, ofs::FitState{T}, num_samples; verbose=
                 push!(ofs.solutions, new_sol)
                 ofs.best_objective = sol.objective
 
-                verbose && printstyled(@sprintf("new improoved result: idx %i fmin %e %s\n", i, sol.objective, sol.retcode), color=:red)
+                printstyled(@sprintf("new improoved result: idx %i fmin %e %s\n", i, sol.objective, sol.retcode), color=:green)
             end
             i += 1
         end

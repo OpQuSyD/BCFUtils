@@ -17,12 +17,15 @@ b = OhmicExpCO(1)
 b = OhmicExpCO(1, c1=1)
 @test typeof_bath(b) == typeof(2.0)
 
+# explicit type given for bath
 b = OhmicExpCO{Float32}(1)
 @test typeof_bath(b) == Float32
 
-b = OhmicExpCO(BigFloat(1, precision=20))
+setprecision(BigFloat, 400)
+b = OhmicExpCO(BigFloat(1))
 @test typeof_bath(b) == BigFloat
 
+# check specific values
 eta = 2.3
 b = OhmicExpCO(0.5, eta, 10000)
 @test abs(sd(1, b) - eta) < 0.001
@@ -30,6 +33,28 @@ b = OhmicExpCO(0.5, eta, 10000)
 b = OhmicExpCO(1, c1=1)
 @test bcf(0, b) == 1
 @test abs(bcf(1, b)) == 1/2
+
+# type consistency for bcf call
+b = OhmicExpCO{Float16}(1, c1=1)
+t = Float16(1.0)
+w = Float16(2.0)
+@test typeof(bcf(t, b)) == ComplexF16
+@test typeof(sd(w, b)) == Float16
+
+p = 400
+setprecision(BigFloat, p)
+b = OhmicExpCO{BigFloat}(1, c1=1)
+@test precision(b.s) == p
+@test precision(b.c1) == p
+t = BigFloat("2.3")
+c = bcf(t, b)
+@test typeof(c) == Complex{BigFloat}
+@test precision(real(c)) == p
+
+w = BigFloat("3.3")
+c = sd(w, b)
+@test typeof(c) == BigFloat
+@test precision(real(c)) == p
 
 
 ###########################################################
@@ -54,9 +79,11 @@ b = MultiExpBCF(G, W)
 @test eltype(b.u) == Float32
 
 # call with explicit Type
+
+G = [2 + 0im]
+W = [0 + 1im]
 b = MultiExpBCF{Float64}(G, W)
 @test eltype(b.u) == Float64
-
 
 # test specific value
 @test bcf(0, b) == 2
@@ -162,18 +189,29 @@ ofc2 = BCFUtils.FitCfg_for_Ohmic_bath(
 
 @test ofc == ofc2
 
+setprecision(20)
 ofcBF = BCFUtils.FitCfg_for_Ohmic_bath(
-    BigFloat(t_max, precision=20), s, num_exp_terms, diff_kind, 
+    BigFloat(t_max), s, num_exp_terms, diff_kind, 
     p=p, 
     u_init_min=u_init_min, 
     u_init_max=u_init_max
 )
 r = repr(ofcBF)
-@test hash(r) == 0x00c525b5d8bc586c
+@test hash(r) == 0x9201d41205d3d2d4
 ofcBF = BCFUtils.FitState(ofcBF)
-
 @test ofc != ofcBF
 
+
+ofcBF = BCFUtils.FitCfg_for_Ohmic_bath(
+    t_max, BigFloat(s), num_exp_terms, diff_kind, 
+    p=p, 
+    u_init_min=u_init_min, 
+    u_init_max=u_init_max
+)
+r = repr(ofcBF)
+@test hash(r) == 0x9201d41205d3d2d4
+ofcBF2 = BCFUtils.FitState(ofcBF)
+@test ofcBF2 != ofcBF
 
 
 # cunrch the first 5 samples

@@ -74,7 +74,7 @@ end
 
 
 sd(w, b::OhmicExpCO) = b.η * w^b.s * exp(-w/b.wc)
-bcf(t, b::OhmicExpCO) = b.c1 * (b.wc/(1.0 + im*b.wc*t) )^(b.s+1)
+bcf(t, b::OhmicExpCO) = b.c1 * (b.wc/(one(b.s) + im*b.wc*t) )^(b.s+one(b.s))
 
 
 
