@@ -7,13 +7,8 @@ export sd, bcf
 
 using SpecialFunctions
 
+
 Γ = gamma
-
-"all vars to type T"
-convert_many(T::Type, vars...) = Tuple(convert(T, x) for x in vars)
-
-"promoted type of all vars"
-promote_type_of_many(vars...) = promote_type(Tuple(typeof(x) for x in vars)...)
 
 
 """
@@ -34,6 +29,8 @@ From that one can deduce
     F(ω) = ∫_0^∞ d t α(β, t) exp(i ω t) = J(ω) + i S(ω)
 """
 abstract type AbstractBath{T<:AbstractFloat} end
+typeof_bath(b::AbstractBath{T}) where T = T 
+
 
 
 

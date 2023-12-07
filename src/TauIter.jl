@@ -1,6 +1,8 @@
 export TauExpIter, get_TauExpIter_for_Ohmic
 
 abstract type AbstractTauIter{T <: Real} end
+typeof_tau_iter(b::AbstractTauIter{T}) where T = T 
+
 
 """
 Distribution of time arguments used to calculate the difference
@@ -43,7 +45,7 @@ convenient function to construct TauExpIter from the meaningful parameters
 
 ToDo: explain parameters
 """
-function get_TauExpIter_for_Ohmic(t_max, s, len, a_tilde=0.1, u_tilde=0.5)
+function get_TauExpIter_for_Ohmic(t_max, s, len::Int64, a_tilde=0.1, u_tilde=0.5)
     0 < a_tilde < 1 || thorw(ArgumentError("0 < a_tilde < 1 needs to hold"))
     0 < u_tilde < 1 || thorw(ArgumentError("0 < u_tilde < 1 needs to hold"))
     

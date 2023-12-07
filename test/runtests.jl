@@ -3,27 +3,28 @@ using Revise
 using BCFUtils
 using Test
 
-typeof_bath(b::OhmicExpCO{T}) where T = T 
+x = NTuple{2, Float64}((2, 2))
+convert(NTuple{2, Float16}, x)
 
 ###########################################################
 # simple tests of the Ohmic sd with exponential cutoff
 
 b = OhmicExpCO(0.2)
-@test typeof_bath(b) == typeof(2.0)
+@test BCFUtils.typeof_bath(b) == typeof(2.0)
 
 b = OhmicExpCO(1)
-@test typeof_bath(b) == typeof(2.0)
+@test BCFUtils.typeof_bath(b) == typeof(2.0)
 
 b = OhmicExpCO(1, c1=1)
-@test typeof_bath(b) == typeof(2.0)
+@test BCFUtils.typeof_bath(b) == typeof(2.0)
 
 # explicit type given for bath
 b = OhmicExpCO{Float32}(1)
-@test typeof_bath(b) == Float32
+@test BCFUtils.typeof_bath(b) == Float32
 
 setprecision(BigFloat, 400)
 b = OhmicExpCO(BigFloat(1))
-@test typeof_bath(b) == BigFloat
+@test BCFUtils.typeof_bath(b) == BigFloat
 
 # check specific values
 eta = 2.3
@@ -177,7 +178,7 @@ ofc = BCFUtils.FitCfg_for_Ohmic_bath(
         u_init_max=u_init_max,
     )
 r = repr(ofc)
-@test hash(r) == 0x95edec8626492c31
+@test hash(r) == 0x2dabfc9e34870160
 ofs = BCFUtils.FitState(ofc)
 
 ofc2 = BCFUtils.FitCfg_for_Ohmic_bath(
@@ -197,7 +198,7 @@ ofcBF = BCFUtils.FitCfg_for_Ohmic_bath(
     u_init_max=u_init_max
 )
 r = repr(ofcBF)
-@test hash(r) == 0x9201d41205d3d2d4
+@test hash(r) == 0xb0e5279e46b7e4e5
 ofcBF = BCFUtils.FitState(ofcBF)
 @test ofc != ofcBF
 
@@ -209,7 +210,7 @@ ofcBF = BCFUtils.FitCfg_for_Ohmic_bath(
     u_init_max=u_init_max
 )
 r = repr(ofcBF)
-@test hash(r) == 0x9201d41205d3d2d4
+@test hash(r) == 0xb0e5279e46b7e4e5
 ofcBF2 = BCFUtils.FitState(ofcBF)
 @test ofcBF2 != ofcBF
 
@@ -237,5 +238,4 @@ c = BCFUtils.fit(ofc, 10, path, verbose=false)
 c = BCFUtils.fit(ofc, 10, path, verbose=false)
 @test c == 0
 
-println("all tests passed")
 

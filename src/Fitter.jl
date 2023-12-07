@@ -1,4 +1,4 @@
-export fit_bcf_to_exp
+export FitCfg, FitCfg_for_Ohmic_bath, fit, get_fit, u_limits
 
 using SciMLBase
 using Optimization
@@ -51,22 +51,28 @@ struct FitCfg{T<:AbstractFloat}
     diff_kind::Symbol
     maxiters::Int64
 
-    function FitCfg{T}(
+    function FitCfg(
             b::AbstractBath{T},
             tau_range::AbstractTauIter{T},
             num_exp_terms::Int64, 
-            p::T, 
-            u_init_min::NTuple{4, T}, 
-            u_init_max::NTuple{4, T}, 
+            p::Real, 
+            u_init_min::NTuple{4, Real}, 
+            u_init_max::NTuple{4, Real}, 
             diff_kind::Symbol, 
             maxiters::Int64, 
-        ) where T<:AbstractFloat
+        ) where T <: AbstractFloat
         0 < num_exp_terms || throw("0 < num_exp_terms required")
         0 < p || throw("0 < p required")
         1 < maxiters || throw("1 < maxiters required")
-        new(b, tau_range, num_exp_terms, p, u_init_min, u_init_max, diff_kind, maxiters)
+
+        p = convert(T, p)
+        u_init_min = convert(NTuple{4, T}, u_init_min)
+        u_init_max = convert(NTuple{4, T}, u_init_max)
+        
+        new{T}(b, tau_range, num_exp_terms, p, u_init_min, u_init_max, diff_kind, maxiters)
     end
 end
+
 
 "convenient function for (reduced) Ohmic BCFs, i.e., wc=1 and c1=1, which gets FitCfg with some default values"
 function FitCfg_for_Ohmic_bath(
@@ -82,16 +88,16 @@ function FitCfg_for_Ohmic_bath(
     a_tilde=0.1, 
     u_tilde=0.5
 )
-    _d = promote(t_max, s, p, u_init_min[1], u_init_max[1], a_tilde, u_tilde, 1.0)
-    t_max, s, p, _, _, a_tilde, u_tilde, _ = _d
-    T = typeof(t_max)
+
+    T = promote_type_of_many(t_max, s, p, u_init_min..., u_init_max..., a_tilde, u_tilde)
     u_init_min = NTuple{4, T}(u_init_min)
     u_init_max = NTuple{4, T}(u_init_max)
 
-    b = OhmicExpCO(s, c1=1)
+    b = OhmicExpCO{T}(s, c1=1)
+    t_max, s, a_tilde, u_tilde = convert_many(T, t_max, s, a_tilde, u_tilde)
     tau_range = get_TauExpIter_for_Ohmic(t_max, s, num_tau, a_tilde, u_tilde)
     
-    FitCfg{T}(b, tau_range, num_exp_terms, p, u_init_min, u_init_max, diff_kind, maxiters)
+    FitCfg(b, tau_range, num_exp_terms, p, u_init_min, u_init_max, diff_kind, maxiters)
 end
 
 
@@ -159,40 +165,40 @@ function fit_bcf_to_exp(tau_test, bcf_tau, p, u0, method, maxiters, diff_kind::S
     return sol
 end
 
-function get_TauExpRange(ofc::FitCfg)
-    BCF.get_TauExpRange(ofc.t_max, ofc.s, ofc.num_tau, ofc.a_tilde, ofc.u_tilde)
+function get_TauExpRange(fc::FitCfg)
+    BCF.get_TauExpRange(fc.t_max, fc.s, fc.num_tau, fc.a_tilde, fc.u_tilde)
 end
 
 """
 # fit exp bcf to Ohmic-kind bcf for many Sobol generated initial conditions
 
-Based on the state given by `ofs::FitState` continue to process new Sobol samples 
+Based on the state given by `fs::FitState` continue to process new Sobol samples 
 until `num_samples` have been processed.
-Only results with lower objective value are added to `ofs::FitState`.
+Only results with lower objective value are added to `fs::FitState`.
 
 An InterruptException will stop the routine early and return gracefully with the current state.
 
 # Arguments
-- `ofc::FitCfg{T}`: fit configuration (see `struct FitCfg` for details)
-- `ofs::FitState{T}`: this mutable struct keeps track of the processed samples 
+- `fc::FitCfg{T}`: fit configuration (see `struct FitCfg` for details)
+- `fs::FitState{T}`: this mutable struct keeps track of the processed samples 
     and stores sequentially improving results
 - `num_samples` the maximum number of samples to process
 """
-function sobol_scan_fit!(ofc::FitCfg{T}, ofs::FitState{T}, num_samples; verbose=false) where {T<:AbstractFloat}
+function sobol_scan_fit!(fc::FitCfg{T}, fs::FitState{T}, num_samples; verbose=false) where {T<:AbstractFloat}
     # we need the parametric type {T} here, as its needed to instanciate the new solution object
 
-    tau_test = collect(ofc.tau_range)
-    bcf_tau_test = [bcf(ti, ofc.b) for ti in tau_test]
+    tau_test = collect(fc.tau_range)
+    bcf_tau_test = [bcf(ti, fc.b) for ti in tau_test]
     
     method_NM = NelderMead()
     method_BFGS = BFGS()
        
     # init  low-discrepancy sobol sequence
-    sobol_seq = Sobol.SobolSeq(4*ofc.num_exp_terms)
+    sobol_seq = Sobol.SobolSeq(4*fc.num_exp_terms)
     # skip already checked samples
-    Base.skip(sobol_seq, ofs.sobol_idx, exact=true)
+    Base.skip(sobol_seq, fs.sobol_idx, exact=true)
 
-    i = ofs.sobol_idx+1
+    i = fs.sobol_idx+1
 
     cnt_new = 0
     was_interrupted = false
@@ -204,21 +210,21 @@ function sobol_scan_fit!(ofc::FitCfg{T}, ofs::FitState{T}, num_samples; verbose=
             # draw initial condition using sobol samples
             u0 = next!(sobol_seq)
             for i in 1:4
-                u0[i:4:end] = ofc.u_init_min[i] .+ (ofc.u_init_max[i]-ofc.u_init_min[i])*u0[i:4:end]
+                u0[i:4:end] = fc.u_init_min[i] .+ (fc.u_init_max[i]-fc.u_init_min[i])*u0[i:4:end]
             end 
         
             # run NelderMead followed by BFGS Optimization
-            sol_pre = fit_bcf_to_exp(tau_test, bcf_tau_test, ofc.p, u0, method_NM, Integer(ceil(ofc.maxiters/10)), ofc.diff_kind)
+            sol_pre = fit_bcf_to_exp(tau_test, bcf_tau_test, fc.p, u0, method_NM, Integer(ceil(fc.maxiters/3)), fc.diff_kind)
             verbose && @printf("NelderMead pre solution: fmin %.4e %s, ",sol_pre.objective, sol_pre.retcode)
-            sol = fit_bcf_to_exp(tau_test, bcf_tau_test, ofc.p, sol_pre.u, method_BFGS, ofc.maxiters, ofc.diff_kind)
+            sol = fit_bcf_to_exp(tau_test, bcf_tau_test, fc.p, sol_pre.u, method_BFGS, fc.maxiters, fc.diff_kind)
             verbose && @printf("BFGS solution: fmin %.4e %s\n", sol.objective, sol.retcode)
 
-            if sol.objective < ofs.best_objective
+            if sol.objective < fs.best_objective
                 cnt_new += 1
                 # store new solution which improves previous one
                 new_sol = FitSol{T}(i, sol.u, sol.objective, sol.retcode)
-                push!(ofs.solutions, new_sol)
-                ofs.best_objective = sol.objective
+                push!(fs.solutions, new_sol)
+                fs.best_objective = sol.objective
 
                 printstyled(@sprintf("new improoved result: idx %i fmin %e %s\n", i, sol.objective, sol.retcode), color=:green)
             end
@@ -230,33 +236,33 @@ function sobol_scan_fit!(ofc::FitCfg{T}, ofs::FitState{T}, num_samples; verbose=
         isa(e, InterruptException) || throw(e)
         was_interrupted = true
     end
-    ofs.sobol_idx = i-1
+    fs.sobol_idx = i-1
 
     return cnt_new, was_interrupted
 end
 
 
 """
-hash the string repr of `ofc::FitCfg` and return its hex string
+hash the string repr of `fc::FitCfg` and return its hex string
 
 ### ToDO 
 
-come up with something more robust that `repr(ofc)`
+come up with something more robust that `repr(fc)`
 """
-function fc_identifyer(ofc::FitCfg)
-    r = repr(ofc)
+function fc_identifyer(fc::FitCfg)
+    r = repr(fc)
     string(hash(r), base=16)
 end
 
-"save fit state, contruct unique file name based on `ofc::FitCfg`"
-function save(ofc::FitCfg, ofs::FitState, path=".fit")
-    save(fc_identifyer(ofc), ofc, ofs, path)
+"save fit state, contruct unique file name based on `fc::FitCfg`"
+function save(fc::FitCfg, fs::FitState, path=".fit")
+    save(fc_identifyer(fc), fc, fs, path)
 end
 
 "save fit state"
-function save(fname, ofc::FitCfg, ofs::FitState, path=".fit")
+function save(fname, fc::FitCfg, fs::FitState, path=".fit")
     ispath(path) || mkdir(path)
-    serialize(joinpath(path, fname), (ofc, ofs))
+    serialize(joinpath(path, fname), (fc, fs))
     @info "fit state saved"
 end
 
@@ -267,44 +273,44 @@ function load(full_name)
 end
 
 "load fit for a given data FitCfg, return (sobol_state, data)"
-function load(ofc::FitCfg, path=".fit")
-    fname = fc_identifyer(ofc)
+function load(fc::FitCfg, path=".fit")
+    fname = fc_identifyer(fc)
     full_name = joinpath(path, fname)
 
     if ispath(full_name)
         # load from file
-        ofc_ff, ofs = load(full_name)
+        fc_ff, fs = load(full_name)
         # sanity check
-        @assert ofc_ff == ofc
+        @assert fc_ff == fc
     else
         # create new state based on config
-        ofs = FitState(ofc)
+        fs = FitState(fc)
     end
 
-    return ofs, ofc
+    return fs, fc
 end
 
 
 "load state, run fits, save state and return numbes of processed sobol samples"
-function fit(ofc::FitCfg, num_samples, path=".fit"; verbose=false)
-    ofs, _ = load(ofc, path)
-    i_0 = ofs.sobol_idx
-    _, was_interrupted = sobol_scan_fit!(ofc, ofs, num_samples, verbose=verbose)
-    save(ofc, ofs, path)
+function fit(fc::FitCfg, num_samples, path=".fit"; verbose=false)
+    fs, _ = load(fc, path)
+    i_0 = fs.sobol_idx
+    _, was_interrupted = sobol_scan_fit!(fc, fs, num_samples, verbose=verbose)
+    save(fc, fs, path)
     was_interrupted && throw(InterruptException())
-    return ofs.sobol_idx - i_0
+    return fs.sobol_idx - i_0
 end
 
 
 function get_fit(full_name::AbstractString, idx::Integer)
-    _, ofs = load(full_name)
-    idx <= 0 && return ofs.solutions[end]
-    return ofs.solutions[idx]
+    _, fs = load(full_name)
+    idx <= 0 && return fs.solutions[end]
+    return fs.solutions[idx]
 end
 
 
-function get_fit(ofc::FitCfg, idx=0, path=".fit")
-    full_name = joinpath(path, fc_identifyer(ofc))
+function get_fit(fc::FitCfg, idx=0, path=".fit")
+    full_name = joinpath(path, fc_identifyer(fc))
     get_fit(full_name, idx)
 end
 
