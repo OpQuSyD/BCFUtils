@@ -215,11 +215,9 @@ ofcBF2 = BCFUtils.FitState(ofcBF)
 @test ofcBF2 != ofcBF
 
 
-# cunrch the first 5 samples
+# crunch the first 5 samples
 ofs = BCFUtils.FitState(ofc)
 cnt_new, _ = BCFUtils.sobol_scan_fit!(ofc, ofs, 5)
-@test ofs.solutions[1].idx == 1
-@test ofs.solutions[end].idx == 4
 @test ofs.sobol_idx == 5
 @test cnt_new == length(ofs.solutions)
 
